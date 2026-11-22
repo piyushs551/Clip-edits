@@ -206,3 +206,24 @@ def test_pan_shows_different_part_of_frame(clip, tmp_path):
     left, right, top, bottom = window(-1, 0), window(1, 0), window(0, -1), window(0, 1)
     assert np.abs(left - right).mean() > 3
     assert np.abs(top - bottom).mean() > 3
+
+
+def test_best_quality_is_tagged_bt709_and_larger_than_good(clip, tmp_path):
+    sizes = {}
+    for q in ("best", "crf"):
+        out = tmp_path / f"{q}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(clip), start=1, end=4, quality=q),
+                                      str(out)))
+        sizes[q] = out.stat().st_size
+    v, _, _ = streams(out)
+    assert v["profile"] == "High" and v["color_space"] == "bt709"
+    assert v["color_transfer"] == "bt709" and v["color_primaries"] == "bt709"
+    assert sizes["best"] > sizes["crf"] * 1.15      # CRF 14 spends clearly more bits than 18
+
+
+def test_60fps_export(clip, tmp_path):
+    out = tmp_path / "f60.mp4"
+    run_simple(c.build_export_cmd(c.ExportSpec(src=str(clip), start=1, end=3, fps=60,
+                                               quality="crf"), str(out)))
+    v, _, dur = streams(out)
+    assert v["r_frame_rate"] == "60/1" and abs(dur - 2) < 0.3

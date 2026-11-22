@@ -13,11 +13,11 @@ Updated with every change; newest entries first.
 - [x] 4b. Frame layout: sharp clip stays a full landscape window; zoom 100–150 % magnifies inside it; pan X/Y; vertical clip position; drag / Shift+drag / scroll in the preview
 - [x] 5. Text overlays (time range, size, white/red), Poppins Bold + black outline, safe-area preview, saved presets incl. red "DAY 1" label
 - [x] 6. Optional end card (logo on navy #1E1B4B, 2.5 s)
-- [x] 7. Export: libx264 CRF 18 / 20 Mbps, yuv420p, aac 192k, faststart, dated slug filename, progress bar
+- [x] 7. Export: libx264 Best (CRF 14) / CRF 18 / 20 Mbps, 30 or 60 fps, yuv420p, aac 192k, faststart, dated slug filename, progress bar
 - [x] 8. Privacy contact sheet (8 frames) after export
 - [x] 9. Freeze last frame 1–2 s
 - [x] Error handling: missing ffmpeg (winget hint), bad file, end ≤ start
-- [x] Tests: 70 passing (unit + synthetic-clip integration + Flask API)
+- [x] Tests: 76 passing (unit + synthetic-clip integration + Flask API)
 
 ### Verified so far (Linux, headless)
 - Unit + integration tests, including a font path containing a colon and spaces (stand-in for `C:\`)
@@ -36,9 +36,13 @@ Updated with every change; newest entries first.
 
 ## Log
 
+### 2026-11-22 (quality)
+- Crispness pass: default quality is now *Best* (x264 CRF 14, preset slow, High profile), Lanczos resize for the sharp clip, BT.709 colour tags, GOP = 2 s, optional 60 fps output (30 stays default). "Good" (CRF 18) and 20 Mbps remain selectable.
+- Tips for upload: upload the MP4 directly (not a screen recording), 1080x1920; 60 fps for fast gameplay.
+
 ### 2026-11-22 (frame layout)
 - Added frame rearranging: vertical clip position (clamped to the frame), zoom that magnifies *inside* the full-landscape window (instead of widening it), horizontal + vertical pan. Preview supports drag, Shift+drag and scroll.
-- Tests: filter-string checks plus integration tests that measure where the sharp window lands in a real export (noise clip) and that zoom/pan change the visible content. 70 passing.
+- Tests: filter-string checks plus integration tests that measure where the sharp window lands in a real export (noise clip) and that zoom/pan change the visible content. 76 passing.
 - Browser-checked: preview and exported frames agree.
 
 ### 2026-11-22 (Windows first run)

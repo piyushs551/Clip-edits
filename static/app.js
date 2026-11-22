@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const S = {
   info: null, clips: [], sugg: [], sel: null, presets: {},
-  t: { zoom: 100, xpan: 0, ypan: 0, ypos: 0, volume: 20, mute: false, grain: 0, freeze: 0, quality: "crf", slug: "short" },
+  t: { zoom: 100, xpan: 0, ypan: 0, ypos: 0, volume: 20, mute: false, grain: 0, freeze: 0, quality: "best", fps: 30, slug: "short" },
   endcard: false, logo: "",
 };
 const PRE = 5, POST = 15;                 // mark -> start = mark-5, end = mark+15
@@ -221,7 +221,7 @@ function renderEditor() {
   syncPos();
   $("volume").value = S.t.volume; $("volumev").textContent = S.t.volume + "%";
   $("mute").checked = S.t.mute; $("grain").value = S.t.grain; $("grainv").textContent = S.t.grain ? S.t.grain : "off";
-  $("freeze").value = String(S.t.freeze); $("quality").value = S.t.quality; $("slug").value = S.t.slug;
+  $("freeze").value = String(S.t.freeze); $("quality").value = S.t.quality; $("fps").value = String(S.t.fps); $("slug").value = S.t.slug;
   $("endcard").checked = S.endcard; $("logo").value = S.logo;
   renderTexts();
 }
@@ -263,6 +263,7 @@ bindSlider("grain", "grainv", "grain", (v) => (v ? v : "off"));
 $("mute").onchange = () => { S.t.mute = $("mute").checked; persist(); };
 $("freeze").onchange = () => { S.t.freeze = Number($("freeze").value); updateDurLabel(); persist(); };
 $("quality").onchange = () => { S.t.quality = $("quality").value; persist(); };
+$("fps").onchange = () => { S.t.fps = Number($("fps").value); persist(); };
 $("slug").oninput = () => { S.t.slug = $("slug").value; persist(); };
 $("endcard").onchange = () => { S.endcard = $("endcard").checked; updateDurLabel(); persist(); };
 $("logo").oninput = () => { S.logo = $("logo").value; persist(); };
@@ -332,7 +333,7 @@ $("export").onclick = async () => {
   $("exportfill").style.width = "0%"; $("exportmsg").textContent = "Exporting…";
   const body = {
     start: c.start, end: c.end, zoom: S.t.zoom / 100, pan: S.t.xpan / 100, pan_y: S.t.ypan / 100, fg_y: S.t.ypos, volume: S.t.volume / 100, mute: S.t.mute,
-    grain: S.t.grain, freeze: S.t.freeze, quality: S.t.quality, slug: S.t.slug,
+    grain: S.t.grain, freeze: S.t.freeze, quality: S.t.quality, fps: S.t.fps, slug: S.t.slug,
     endcard_logo: S.endcard ? S.logo : null,
     texts: c.texts.map((t) => ({ ...t, color: t.color === "red" ? RED : t.color })),
   };

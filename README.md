@@ -61,8 +61,12 @@ Exports go to `projects\exports\` (set `DAILYCLIP_OUT` to change; `DAILYCLIP_DAT
 5. **Text**: Poppins Bold (bundled; falls back to Arial Bold / DejaVu), black outline, centered, default y = 250.
    White or red `#FF5A5F`. Presets are saved to `projects/presets.json` and include a small red **DAY 1** top-left label.
 6. **End card** (optional): your logo on navy `#1E1B4B` for 2.5 s. **Freeze** holds the last frame 1–2 s.
-7. **Export**: libx264 CRF 18 (or 20 Mbps), yuv420p, AAC 192k, faststart, no watermark →
-   `YYYY-MM-DD_name.mp4`. A **contact sheet** of 8 frames appears afterwards — check it for your PSN name,
+7. **Export**: libx264 High profile, yuv420p, AAC 192k, faststart, no watermark →
+   `YYYY-MM-DD_name.mp4`. **Quality** options: *Best* (CRF 14, slow preset - default, crisp enough to survive
+   YouTube/TikTok/Instagram re-encoding; slower to export and bigger files), *Good* (CRF 18), or 20 Mbps.
+   **Frame rate**: 30 fps, or 60 fps for smoother gameplay (PS5 captures are 60 fps). The sharp clip is resized once
+   with Lanczos (sharpest scaler) and the video is tagged BT.709 so platforms don't shift your colours.
+ A **contact sheet** of 8 frames appears afterwards — check it for your PSN name,
    notifications, trophy pop-ups and chat before posting.
 
 Clips, text and settings are remembered per video in your browser (localStorage).

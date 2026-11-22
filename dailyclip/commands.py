@@ -13,7 +13,8 @@ from typing import Optional
 
 from .util import ValidationError
 
-W, H, FPS = 1080, 1920, 30
+W, H, FPS = 1080, 1920, 30      # FPS = default output frame rate
+FPS_CHOICES = (30, 60)
 NAVY = "1E1B4B"
 RED = "#FF5A5F"
 SAFE_TOP, SAFE_BOTTOM, SAFE_RIGHT = 150, 400, 150
@@ -58,7 +59,8 @@ class ExportSpec:
     endcard_logo: Optional[str] = None
     endcard_secs: float = ENDCARD_SECS
     freeze: float = 0.0
-    quality: str = "crf"        # "crf" (CRF 18) or "bitrate" (20 Mbps)
+    quality: str = "best"       # "best" (CRF 14, slow) | "crf" (CRF 18) | "bitrate" (20 Mbps)
+    fps: int = FPS              # output frame rate: 30 or 60
     font: Optional[str] = None
 
     @property
@@ -111,9 +113,12 @@ def spec_from_dict(d: dict, src_duration: float | None = None,
     volume = num("volume", 0.2, 0.0, 1.0, "Game volume")
     grain = int(num("grain", 0, 0, 50, "Film grain"))
     freeze = num("freeze", 0.0, 0.0, MAX_FREEZE, "Freeze")
-    quality = d.get("quality", "crf")
-    if quality not in ("crf", "bitrate"):
-        raise ValidationError("Quality must be 'crf' or 'bitrate'.")
+    quality = d.get("quality", "best")
+    if quality not in ("best", "crf", "bitrate"):
+        raise ValidationError("Quality must be 'best', 'crf' or 'bitrate'.")
+    fps = int(num("fps", FPS, 1, 120, "Frame rate"))
+    if fps not in FPS_CHOICES:
+        raise ValidationError("Frame rate must be 30 or 60.")
 
     logo = d.get("endcard_logo") or None
     if logo and not Path(logo).is_file():
@@ -148,7 +153,7 @@ def spec_from_dict(d: dict, src_duration: float | None = None,
     return ExportSpec(
         src=str(d.get("src", "")), start=start, end=end, zoom=zoom, fg_y=fg_y, pan=pan, pan_y=pan_y, volume=volume,
         mute=bool(d.get("mute")), grain=grain, has_audio=has_audio, texts=texts,
-        endcard_logo=logo, freeze=freeze, quality=quality,
+        endcard_logo=logo, freeze=freeze, quality=quality, fps=fps,
     )
 
 
@@ -247,7 +252,7 @@ def build_filter_graph(spec: ExportSpec) -> tuple[str, str, str]:
     g: list[str] = []
 
     # --- video: blurred background + sharp (zoomable) foreground -----------
-    g.append(f"[0:v]fps={FPS},setsar=1,split=2[bgin][fgin]")
+    g.append(f"[0:v]fps={spec.fps},setsar=1,split=2[bgin][fgin]")
     bg = (f"[bgin]scale={W}:{H}:force_original_aspect_ratio=increase,"
           f"crop={W}:{H},boxblur=30:5,eq=brightness=-0.15")
     if spec.grain > 0:
@@ -255,7 +260,8 @@ def build_filter_graph(spec: ExportSpec) -> tuple[str, str, str]:
     g.append(bg + "[bg]")
 
     fg_w = int(round(W * spec.zoom / 2.0)) * 2
-    fg = f"[fgin]scale={fg_w}:-2"
+    # lanczos = sharpest resampling; zoom is applied in this single resize (no double resampling)
+    fg = f"[fgin]scale={fg_w}:-2:flags=lanczos+accurate_rnd+full_chroma_int"
     if fg_w > W:
         # Zoom INTO the picture: the sharp clip keeps its full landscape window
         # (1080 wide, original aspect), the content inside is magnified and
@@ -291,10 +297,10 @@ def build_filter_graph(spec: ExportSpec) -> tuple[str, str, str]:
     # --- optional end card: logo on navy -----------------------------------
     if spec.endcard_logo:
         s = fmt(spec.endcard_secs)
-        g.append(f"color=c=0x{NAVY}:s={W}x{H}:r={FPS}:d={s}[navy]")
+        g.append(f"color=c=0x{NAVY}:s={W}x{H}:r={spec.fps}:d={s}[navy]")
         g.append("[1:v]format=rgba,scale=w=800:h=800:force_original_aspect_ratio=decrease[logo]")
         g.append("[navy][logo]overlay=(W-w)/2:(H-h)/2:shortest=1,"
-                 f"fps={FPS},setsar=1,format=yuv420p[vend]")
+                 f"fps={spec.fps},setsar=1,format=yuv420p[vend]")
         g.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={s},asetpts=N/SR/TB[aend]")
         g.append("[vmain][amain][vend][aend]concat=n=2:v=1:a=1[vout][aout]")
         return ";".join(g), "[vout]", "[aout]"
@@ -311,12 +317,16 @@ def build_export_cmd(spec: ExportSpec, out_path: str, ffmpeg: str = "ffmpeg") ->
     if spec.endcard_logo:
         cmd += ["-loop", "1", "-t", fmt(spec.endcard_secs), "-i", str(spec.endcard_logo)]
     cmd += ["-filter_complex", graph, "-map", vlabel, "-map", alabel,
-            "-r", str(FPS), "-c:v", "libx264", "-preset", "medium"]
+            "-r", str(spec.fps), "-c:v", "libx264", "-profile:v", "high"]
     if spec.quality == "bitrate":
-        cmd += ["-b:v", "20M", "-maxrate", "20M", "-bufsize", "40M"]
-    else:
-        cmd += ["-crf", "18"]
-    cmd += ["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
+        cmd += ["-preset", "slow", "-b:v", "20M", "-maxrate", "20M", "-bufsize", "40M"]
+    elif spec.quality == "crf":
+        cmd += ["-preset", "medium", "-crf", "18"]
+    else:  # "best": near-transparent, so platform re-encoding starts from a clean source
+        cmd += ["-preset", "slow", "-crf", "14"]
+    cmd += ["-g", str(spec.fps * 2), "-pix_fmt", "yuv420p",
+            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+            "-color_range", "tv", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
             "-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(out_path)]
     return cmd
 

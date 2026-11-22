@@ -29,12 +29,12 @@ def test_grain_strength():
 
 def test_foreground_no_zoom_no_crop():
     g = graph(zoom=1.0)
-    assert "[fgin]scale=1080:-2[fg]" in g
+    assert "[fgin]scale=1080:-2:flags=lanczos+accurate_rnd+full_chroma_int[fg]" in g
 
 
 def test_foreground_zoom_crops_sides():
     g = graph(zoom=1.5)
-    assert ("[fgin]scale=1620:-2,crop=1080:trunc(ih*1080/iw/2)*2:"
+    assert ("[fgin]scale=1620:-2:flags=lanczos+accurate_rnd+full_chroma_int,crop=1080:trunc(ih*1080/iw/2)*2:"
             "x=(iw-ow)*0.5000:y=(ih-oh)*0.5000[fg]") in g
 
 
@@ -67,7 +67,7 @@ def test_zoom_keeps_landscape_window():
 
 def test_pan_ignored_without_zoom():
     fg_chain = graph(zoom=1.0, pan=1).split("[fgin]")[-1].split("[fg]")[0]
-    assert fg_chain == "scale=1080:-2"
+    assert fg_chain == "scale=1080:-2:flags=lanczos+accurate_rnd+full_chroma_int"
 
 
 def test_position_validation():
@@ -195,11 +195,39 @@ def test_fontfile_escaped_in_filter(tmp_path):
 def test_export_command_encoding_flags():
     cmd = c.build_export_cmd(spec(font="/f.ttf"), "out.mp4")
     j = " ".join(cmd)
-    for needle in ("-c:v libx264", "-crf 18", "-pix_fmt yuv420p", "-c:a aac", "-b:a 192k",
-                   "-movflags +faststart", "-r 30"):
+    for needle in ("-c:v libx264", "-profile:v high", "-crf 14", "-preset slow", "-pix_fmt yuv420p",
+                   "-c:a aac", "-b:a 192k", "-movflags +faststart", "-r 30",
+                   "-colorspace bt709", "-color_primaries bt709", "-color_trc bt709"):
         assert needle in j
     assert cmd[-1] == "out.mp4"
     assert "-ss 10 -t 20 -i in.mp4" in j
+
+
+def test_quality_presets():
+    j = lambda q: " ".join(c.build_export_cmd(spec(font="/f.ttf", quality=q), "o.mp4"))
+    assert "-crf 14" in j("best") and "-preset slow" in j("best")
+    assert "-crf 18" in j("crf") and "-preset medium" in j("crf")
+    assert "-b:v 20M" in j("bitrate") and "-crf" not in j("bitrate")
+
+
+def test_default_quality_is_best():
+    assert c.spec_from_dict(d()).quality == "best"
+    with pytest.raises(ValidationError):
+        c.spec_from_dict(d(quality="ultra"))
+
+
+def test_60fps_option_everywhere():
+    s = spec(font="/f.ttf", fps=60, endcard_logo="l.png")
+    g = c.build_filter_graph(s)[0]
+    assert "fps=60" in g and "fps=30" not in g and "r=60" in g
+    cmd = c.build_export_cmd(s, "o.mp4")
+    assert cmd[cmd.index("-r") + 1] == "60" and cmd[cmd.index("-g") + 1] == "120"
+
+
+def test_fps_validation():
+    assert c.spec_from_dict(d(fps=60)).fps == 60
+    with pytest.raises(ValidationError):
+        c.spec_from_dict(d(fps=45))
 
 
 def test_export_command_bitrate_mode():
