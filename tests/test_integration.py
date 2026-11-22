@@ -1,0 +1,129 @@
+"""Integration: synthetic 10 s clip -> real export through ffmpeg."""
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from conftest import needs_ffmpeg
+from dailyclip import commands as c
+from dailyclip import peaks
+from dailyclip.probe import probe
+from dailyclip.runner import run_simple, run_with_progress
+from dailyclip.util import find_font
+
+pytestmark = needs_ffmpeg
+
+
+@pytest.fixture(scope="module")
+def clip(tmp_path_factory):
+    d = tmp_path_factory.mktemp("synthetic dir")  # space in path on purpose
+    out = d / "synthetic clip.mp4"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30:duration=10",
+         "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=10",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out)],
+        check=True)
+    return out
+
+
+@pytest.fixture(scope="module")
+def logo(tmp_path_factory):
+    out = tmp_path_factory.mktemp("logo") / "logo.png"
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                    "-i", "color=c=orange:s=400x200", "-frames:v", "1", str(out)], check=True)
+    return out
+
+
+def streams(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-print_format", "json", "-show_streams",
+                          "-show_format", str(path)], capture_output=True, text=True, check=True)
+    data = json.loads(out.stdout)
+    v = next(s for s in data["streams"] if s["codec_type"] == "video")
+    a = next(s for s in data["streams"] if s["codec_type"] == "audio")
+    return v, a, float(data["format"]["duration"])
+
+
+def test_probe_synthetic_clip(clip):
+    info = probe(str(clip))
+    assert (info["width"], info["height"], info["fps"]) == (1280, 720, 30.0)
+    assert info["vcodec"] == "h264" and info["has_audio"] and info["browser_playable"]
+    assert 9.9 < info["duration"] < 10.2
+
+
+def test_full_export_with_text_grain_zoom_freeze_endcard(clip, logo, tmp_path):
+    spec = c.ExportSpec(src=str(clip), start=2, end=8, zoom=1.25, volume=0.2, grain=10,
+                        freeze=1.0, endcard_logo=str(logo), has_audio=True,
+                        texts=[c.TextOverlay(text="Clutch: 1v3 at 100%", start=0, end=3),
+                               c.TextOverlay(text="DAY 1", x=60, y=170, size=40,
+                                             color="#FF5A5F", start=0, end=6)])
+    spec.texts = c.write_text_files(spec.texts, tmp_path / "texts dir")
+    out = tmp_path / "out dir" / "short.mp4"
+    out.parent.mkdir()
+    progress = []
+    run_with_progress(c.build_export_cmd(spec, str(out)), spec.total_duration, progress.append)
+
+    v, a, dur = streams(out)
+    assert (v["width"], v["height"]) == (1080, 1920)
+    assert v["codec_name"] == "h264" and v["pix_fmt"] == "yuv420p"
+    assert v["r_frame_rate"] == "30/1"
+    assert a["codec_name"] == "aac"
+    assert abs(dur - (6 + 1 + 2.5)) < 0.3          # clip + freeze + end card
+    assert progress and progress[-1] == 1.0
+    # faststart: moov atom precedes mdat
+    head = out.read_bytes()[:4096 * 64]
+    assert head.find(b"moov") != -1 and head.find(b"moov") < head.find(b"mdat")
+
+    sheet = tmp_path / "sheet.jpg"
+    run_simple(c.build_contact_sheet_cmd(str(out), str(sheet), dur, 8))
+    assert sheet.stat().st_size > 5000
+
+
+def test_export_mute_and_bitrate_mode(clip, tmp_path):
+    spec = c.ExportSpec(src=str(clip), start=0, end=4, mute=True, quality="bitrate")
+    out = tmp_path / "m.mp4"
+    run_simple(c.build_export_cmd(spec, str(out)))
+    v, a, dur = streams(out)
+    assert (v["width"], v["height"]) == (1080, 1920) and abs(dur - 4) < 0.3
+    vol = subprocess.run(["ffmpeg", "-i", str(out), "-af", "volumedetect", "-vn", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    assert "max_volume: -91" in vol or "max_volume: -inf" in vol   # silent
+
+
+def test_game_volume_applies(clip, tmp_path):
+    def peak(volume):
+        out = tmp_path / f"v{volume}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(clip), start=0, end=3, volume=volume),
+                                      str(out)))
+        err = subprocess.run(["ffmpeg", "-i", str(out), "-af", "volumedetect", "-vn", "-f",
+                              "null", "-"], capture_output=True, text=True).stderr
+        return float(err.split("max_volume:")[1].split("dB")[0])
+    assert peak(1.0) - peak(0.2) > 10   # ~14 dB quieter
+
+
+def test_drawtext_with_colon_and_space_in_font_path(clip, tmp_path):
+    """Regression for the Windows 'C:' fontfile problem (colon + spaces in path)."""
+    odd = tmp_path / "my folder:with colon"
+    odd.mkdir()
+    font = odd / "Bold Font.ttf"
+    font.write_bytes(Path(find_font()).read_bytes())
+    spec = c.ExportSpec(src=str(clip), start=0, end=2, font=str(font),
+                        texts=[c.TextOverlay(text="a: b % c")])
+    spec.texts = c.write_text_files(spec.texts, tmp_path / "t")
+    run_simple(c.build_export_cmd(spec, str(tmp_path / "o.mp4")))
+    assert (tmp_path / "o.mp4").stat().st_size > 1000
+
+
+def test_suggest_moments_finds_loud_bursts(tmp_path):
+    src = tmp_path / "burst.mp4"
+    # quiet noise floor with loud bursts at ~10 s and ~30 s of a 45 s file
+    expr = "0.02*sin(2*PI*220*t)+0.9*sin(2*PI*880*t)*(between(t,10,10.4)+between(t,30,30.4))"
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                    "color=c=black:s=320x180:r=10:d=45", "-f", "lavfi", "-i",
+                    f"aevalsrc='{expr}':s=44100:d=45", "-c:v", "libx264", "-c:a", "aac",
+                    "-shortest", str(src)], check=True)
+    found = peaks.suggest_moments(str(src), max_peaks=10)
+    times = [p["time"] for p in found]
+    assert any(9.9 <= t <= 10.5 for t in times) and any(29.9 <= t <= 30.5 for t in times)
+    assert all(b - a >= 4 for a, b in zip(times, times[1:]))

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DailyClip Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1>DailyClip Editor</h1>
+  <span class="sub">Vertical Shorts from long gameplay &middot; 100% offline</span>
+</header>
+
+<div id="banner" class="banner" hidden></div>
+
+<section class="loadbar">
+  <input id="path" type="text" placeholder="Video path, e.g. D:\PS5\Captures\Warzone\clip.webm" spellcheck="false">
+  <button id="pick">Browse…</button>
+  <button id="load" class="primary">Load</button>
+  <span id="info" class="info"></span>
+</section>
+<div id="proxybar" class="proxybar" hidden>
+  <span id="proxymsg"></span> <div class="bar"><div id="proxyfill"></div></div>
+</div>
+
+<main id="app" class="grid" hidden>
+  <!-- LEFT: player -->
+  <section class="col player">
+    <video id="video" playsinline preload="auto"></video>
+    <div class="controls">
+      <button id="play" title="Space">▶</button>
+      <div class="scrub">
+        <div id="ticks" class="ticks"></div>
+        <input id="seek" type="range" min="0" max="1000" value="0" step="1">
+      </div>
+      <span id="time" class="time">0:00 / 0:00</span>
+    </div>
+    <div class="row">
+      <button id="mark" class="primary big" title="M">⚑ Mark moment (M)</button>
+      <button id="back5" title="←">−5s</button>
+      <button id="fwd5" title="→">+5s</button>
+      <button id="suggest">Suggest moments</button>
+    </div>
+    <div id="suggestprog" class="proxybar" hidden><span>Scanning audio…</span> <div class="bar"><div id="suggestfill"></div></div></div>
+    <p class="hint">Keys: <kbd>M</kbd> mark &middot; <kbd>Space</kbd> play/pause &middot; <kbd>←</kbd><kbd>→</kbd> ±5 s (hold <kbd>Shift</kbd> for 1 s)</p>
+
+    <h3>Clips <small id="clipcount"></small></h3>
+    <ul id="clips" class="cards"></ul>
+
+    <details id="sugg" hidden open>
+      <summary>Suggested loud moments <small id="suggcount"></small></summary>
+      <p class="hint">Loud isn't always interesting — keep only the ones you want.</p>
+      <ul id="suggs" class="cards"></ul>
+    </details>
+  </section>
+
+  <!-- MIDDLE: 9:16 preview -->
+  <section class="col preview">
+    <h3>Short preview <small>1080×1920</small></h3>
+    <canvas id="short" width="324" height="576"></canvas>
+    <label class="check"><input type="checkbox" id="safe" checked> Safe areas</label>
+    <label class="check"><input type="checkbox" id="alltext" checked> Always show text</label>
+    <p class="hint">Red zones: top 150&nbsp;px, bottom 400&nbsp;px, right 150&nbsp;px are covered by app UI. Preview approximates ffmpeg's output; grain isn't shown.</p>
+  </section>
+
+  <!-- RIGHT: settings -->
+  <section class="col settings">
+    <div id="noclip" class="empty">Mark a moment (or pick a suggestion) to start a Short.</div>
+    <div id="editor" hidden>
+      <h3>Selected clip</h3>
+      <div class="row">
+        <label>Start <input id="cstart" type="text" size="8"></label>
+        <button id="setstart" title="Use playhead">⇤ playhead</button>
+        <label>End <input id="cend" type="text" size="8"></label>
+        <button id="setend" title="Use playhead">⇥ playhead</button>
+      </div>
+      <div id="cdur" class="hint"></div>
+
+      <h3>Template: Blurred Short</h3>
+      <label class="slider">Zoom <input id="zoom" type="range" min="100" max="150" value="100"> <output id="zoomv">100%</output></label>
+      <label class="slider">Game volume <input id="volume" type="range" min="0" max="100" value="20"> <output id="volumev">20%</output></label>
+      <label class="check"><input type="checkbox" id="mute"> Mute game audio</label>
+      <label class="slider">Film grain <input id="grain" type="range" min="0" max="40" value="0"> <output id="grainv">off</output></label>
+      <label>Freeze last frame
+        <select id="freeze"><option value="0">Off</option><option value="1">1 s</option><option value="1.5">1.5 s</option><option value="2">2 s</option></select>
+      </label>
+
+      <h3>Text</h3>
+      <div class="row">
+        <select id="preset"></select>
+        <button id="addpreset">+ Add line from preset</button>
+        <button id="delpreset" title="Delete the selected preset">🗑</button>
+      </div>
+      <div id="texts"></div>
+      <button id="addtext">+ Add text line</button>
+      <p class="hint">Times are seconds from the clip start; leave End empty for "until the end". Use Enter for a second line.</p>
+
+      <h3>End card <small>optional</small></h3>
+      <label class="check"><input type="checkbox" id="endcard"> Logo on navy, 2.5 s</label>
+      <div class="row"><input id="logo" type="text" placeholder="Logo image path" spellcheck="false"><button id="picklogo">Browse…</button></div>
+
+      <h3>Export</h3>
+      <div class="row">
+        <label>Name <input id="slug" type="text" value="short" size="18"></label>
+        <label>Quality
+          <select id="quality"><option value="crf">CRF 18 (best)</option><option value="bitrate">20 Mbps</option></select>
+        </label>
+      </div>
+      <button id="export" class="primary big">Export Short</button>
+      <div id="exportprog" class="proxybar" hidden><span id="exportmsg">Exporting…</span> <div class="bar"><div id="exportfill"></div></div></div>
+      <div id="result" hidden>
+        <p><strong id="resname"></strong><br><code id="respath"></code><br><a id="reslink" target="_blank">Open / download</a></p>
+        <h3>Privacy check</h3>
+        <p class="warn">Look for your PSN name, friend notifications, trophy pop-ups and chat before posting.</p>
+        <a id="sheetlink" target="_blank"><img id="sheet" alt="Contact sheet"></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
