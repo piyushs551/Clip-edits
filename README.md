@@ -51,6 +51,10 @@ Exports go to `projects\exports\` (set `DAILYCLIP_OUT` to change; `DAILYCLIP_DAT
 
 Clips, text and settings are remembered per video in your browser (localStorage).
 
+## Project status
+
+See [PROGRESS.md](PROGRESS.md) for the feature checklist, what is verified, and the change log.
+
 ## Tests
 
 ```
