@@ -5,28 +5,41 @@ Mark a moment, add text, export. No AI, no API calls, no cost. Runs in your brow
 
 ## Setup (Windows 11)
 
-1. **Python 3.10+** – https://www.python.org/downloads/ (tick "Add python.exe to PATH").
+1. **Python 3.10+** (older versions fail with `future feature annotations is not defined`):
+   ```
+   winget install Python.Python.3.12
+   ```
+   Close and reopen the terminal, then check `py -3.12 --version`.
 2. **ffmpeg** (includes ffprobe), then **close and reopen the terminal**:
    ```
    winget install Gyan.FFmpeg
    ```
    Check with `ffmpeg -version`. If it's missing, the app shows this exact install message.
-3. Get the code and install the (tiny) dependencies:
+3. Get the code:
    ```
    git clone https://github.com/piyushs551/Clip-edits.git
    cd Clip-edits
-   git checkout claude/beautiful-wozniak-4tvwnj
-   python -m venv .venv
-   .venv\Scripts\activate
-   pip install -r requirements.txt
    ```
 
 ## Run
 
+Easiest (creates `.venv`, installs dependencies, starts the app; no activation needed):
 ```
-python app.py
+.\run.bat
+```
+
+Or by hand, without activating anything (this avoids PowerShell's "running scripts is disabled" error):
+```
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe app.py
 ```
 Your browser opens at http://127.0.0.1:5000. Stop with Ctrl+C. Nothing leaves your machine.
+
+Troubleshooting:
+- *"running scripts is disabled"* when activating the venv: don't activate; use `run.bat` or the `.venv\Scripts\python.exe` form above.
+- *`pip` is not recognized*: use `python -m pip ...` (or the venv form above).
+- *`future feature annotations is not defined`*: your `python` is too old. Install 3.12 as above, delete the `.venv` folder, and run `run.bat`.
 
 Exports go to `projects\exports\` (set `DAILYCLIP_OUT` to change; `DAILYCLIP_DATA` moves all working files).
 
@@ -68,6 +81,7 @@ ffprobe (1080×1920, 30 fps, H.264, yuv420p, AAC, faststart, duration with freez
 ## Layout
 
 ```
+run.bat                Windows launcher (venv + deps + start)
 app.py                 Flask server + background jobs
 dailyclip/commands.py  pure ffmpeg command / filtergraph builders (+ validation)
 dailyclip/probe.py     ffprobe wrapper, browser-playability check

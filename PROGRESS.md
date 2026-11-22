@@ -23,7 +23,7 @@ Updated with every change; newest entries first.
 - Headless-browser run: load → mark → suggest → text/zoom/freeze → export → contact sheet
 
 ### Not yet verified
-- [ ] Run on Windows 11 with the real `ffmpeg` from winget
+- [ ] Run on Windows 11 with the real `ffmpeg` from winget (setup fixed via `run.bat`, app launch pending confirmation)
 - [ ] Real PS5 clip (`.webm` VP9 and `.mp4`), including a long (30–60 min) file for peak-scan and proxy speed
 - [ ] `C:\` fontfile escaping in a real Windows run
 - [ ] Native file picker (tkinter) on Windows
@@ -34,6 +34,10 @@ Updated with every change; newest entries first.
 - Export one clip at a time (no batch export)
 
 ## Log
+
+### 2026-11-22 (Windows first run)
+- First run on the laptop hit two setup problems: PowerShell blocked `.venv\Scripts\activate` (so `pip` wasn't found) and `python` was older than 3.7 (`future feature annotations` SyntaxError).
+- Added `run.bat` (finds Python 3.10+ via `py`, makes the venv, installs deps, starts the app without activation) and rewrote the README setup/troubleshooting.
 
 ### 2026-11-22
 - Built v1: Flask app, `dailyclip/` pure command builders, web UI, tests, README. Pushed on `claude/beautiful-wozniak-4tvwnj`.
