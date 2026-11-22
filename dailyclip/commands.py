@@ -47,6 +47,9 @@ class ExportSpec:
     start: float
     end: float
     zoom: float = 1.0
+    fg_y: int = 0               # vertical offset of the sharp clip in output px (+ = down)
+    pan: float = 0.0            # -1 (left) .. 1 (right): which part shows when zoomed
+    pan_y: float = 0.0          # -1 (top) .. 1 (bottom): same, vertically
     volume: float = 0.20        # 0..1
     mute: bool = False
     grain: int = 0              # 0 = off, noise strength otherwise
@@ -102,6 +105,9 @@ def spec_from_dict(d: dict, src_duration: float | None = None,
             )
     clip_len = end - start
     zoom = num("zoom", 1.0, 1.0, 1.5, "Zoom")
+    fg_y = int(num("fg_y", 0, -H // 2, H // 2, "Vertical position"))
+    pan = num("pan", 0.0, -1.0, 1.0, "Horizontal pan")
+    pan_y = num("pan_y", 0.0, -1.0, 1.0, "Vertical pan")
     volume = num("volume", 0.2, 0.0, 1.0, "Game volume")
     grain = int(num("grain", 0, 0, 50, "Film grain"))
     freeze = num("freeze", 0.0, 0.0, MAX_FREEZE, "Freeze")
@@ -140,7 +146,7 @@ def spec_from_dict(d: dict, src_duration: float | None = None,
         ))
 
     return ExportSpec(
-        src=str(d.get("src", "")), start=start, end=end, zoom=zoom, volume=volume,
+        src=str(d.get("src", "")), start=start, end=end, zoom=zoom, fg_y=fg_y, pan=pan, pan_y=pan_y, volume=volume,
         mute=bool(d.get("mute")), grain=grain, has_audio=has_audio, texts=texts,
         endcard_logo=logo, freeze=freeze, quality=quality,
     )
@@ -251,9 +257,18 @@ def build_filter_graph(spec: ExportSpec) -> tuple[str, str, str]:
     fg_w = int(round(W * spec.zoom / 2.0)) * 2
     fg = f"[fgin]scale={fg_w}:-2"
     if fg_w > W:
-        fg += f",crop={W}:ih"          # crop the sides when zoomed
+        # Zoom INTO the picture: the sharp clip keeps its full landscape window
+        # (1080 wide, original aspect), the content inside is magnified and
+        # panned by pan / pan_y (0 = centered).
+        fx = (max(-1.0, min(1.0, spec.pan)) + 1) / 2
+        fy = (max(-1.0, min(1.0, spec.pan_y)) + 1) / 2
+        fg += (f",crop={W}:trunc(ih*{W}/iw/2)*2:"
+               f"x=(iw-ow)*{fx:.4f}:y=(ih-oh)*{fy:.4f}")
     g.append(fg + "[fg]")
-    g.append("[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto[v0]")
+    # centered by default; fg_y moves it, clamped so the clip stays inside the frame
+    y = f"(H-h)/2+({int(spec.fg_y)})"
+    g.append(f"[bg][fg]overlay=(W-w)/2:min(max(0\\,{y})\\,H-h):format=auto[v0]")
+
 
     chain = ["setsar=1", "format=yuv420p"]
     if spec.texts:

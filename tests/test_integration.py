@@ -127,3 +127,82 @@ def test_suggest_moments_finds_loud_bursts(tmp_path):
     times = [p["time"] for p in found]
     assert any(9.9 <= t <= 10.5 for t in times) and any(29.9 <= t <= 30.5 for t in times)
     assert all(b - a >= 4 for a, b in zip(times, times[1:]))
+
+
+@pytest.fixture(scope="module")
+def noisy(tmp_path_factory):
+    """Detail everywhere (random noise): blurs to flat grey in the background, stays
+    busy in the sharp foreground, so the foreground's rows are easy to locate."""
+    out = tmp_path_factory.mktemp("noisy") / "noisy.mp4"
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                    "color=c=gray:s=1280x720:r=30:d=3,noise=alls=70:allf=t", "-f", "lavfi", "-i",
+                    "sine=frequency=300:duration=3", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-crf", "10", "-c:a", "aac", "-shortest", str(out)], check=True)
+    return out
+
+
+def _frame(path, vf="format=gray"):
+    import numpy as np
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-frames:v", "1", "-vf", vf,
+                          "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, dtype=np.uint8)
+
+
+def _energy(path):
+    import numpy as np
+    img = _frame(path).reshape(1920, 1080).astype(float)
+    return np.abs(np.diff(img, axis=1)).mean(axis=1)      # detail per row
+
+
+def _sharp_rows(path):
+    """(top, bottom) rows of the sharp foreground (the busy rows)."""
+    import numpy as np
+    e = _energy(path)
+    rows = np.flatnonzero(e > 0.5 * e.max())
+    return int(rows.min()), int(rows.max())
+
+
+def test_vertical_position_moves_clip_and_is_clamped(noisy, tmp_path):
+    tops = {}
+    for name, fg_y in (("mid", 0), ("up", -300), ("down", 300), ("way_up", -960), ("way_down", 960)):
+        out = tmp_path / f"{name}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(noisy), start=0.5, end=1.5, fg_y=fg_y),
+                                      str(out)))
+        tops[name] = _sharp_rows(out)
+    # 1280x720 -> 1080x607 window, centered top = 656
+    assert abs(tops["mid"][0] - 656) < 15 and abs(tops["mid"][1] - 1263) < 15
+    assert abs(tops["up"][0] - 356) < 15 and abs(tops["down"][0] - 956) < 15
+    assert tops["way_up"][0] < 15                    # clamped to the top edge
+    assert tops["way_down"][1] > 1905                # clamped to the bottom edge
+
+
+def test_zoom_keeps_landscape_window_and_magnifies(noisy, clip, tmp_path):
+    import numpy as np
+    def run(zoom):
+        out = tmp_path / f"z{zoom}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(noisy), start=0.5, end=1.5, zoom=zoom),
+                                      str(out)))
+        return out
+    base, zoomed = run(1.0), run(1.5)
+    tb, bb = _sharp_rows(base); tz, bz = _sharp_rows(zoomed)
+    # the window is the same size and place (still full landscape, not taller)
+    assert abs(tb - tz) < 15 and abs(bb - bz) < 15
+    # ...but the picture inside it is magnified: same window, different (zoomed) content
+    def win(zoom):
+        out = tmp_path / f"w{zoom}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(clip), start=1, end=2, zoom=zoom),
+                                      str(out)))
+        return _frame(out).reshape(1920, 1080)[700:1200].astype(float)
+    assert np.abs(win(1.0) - win(1.5)).mean() > 5
+
+
+def test_pan_shows_different_part_of_frame(clip, tmp_path):
+    import numpy as np
+    def window(pan, pan_y):
+        out = tmp_path / f"pan{pan}_{pan_y}.mp4"
+        run_simple(c.build_export_cmd(c.ExportSpec(src=str(clip), start=1, end=2, zoom=1.5,
+                                                   pan=pan, pan_y=pan_y), str(out)))
+        return _frame(out).reshape(1920, 1080)[700:1200].astype(float)
+    left, right, top, bottom = window(-1, 0), window(1, 0), window(0, -1), window(0, 1)
+    assert np.abs(left - right).mean() > 3
+    assert np.abs(top - bottom).mean() > 3

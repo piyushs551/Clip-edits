@@ -61,6 +61,7 @@
     <canvas id="short" width="324" height="576"></canvas>
     <label class="check"><input type="checkbox" id="safe" checked> Safe areas</label>
     <label class="check"><input type="checkbox" id="alltext" checked> Always show text</label>
+    <p class="hint"><b>Drag</b> the preview to move the clip up/down · <b>Shift+drag</b> to pan inside a zoomed clip · <b>scroll</b> to zoom.</p>
     <p class="hint">Red zones: top 150&nbsp;px, bottom 400&nbsp;px, right 150&nbsp;px are covered by app UI. Preview approximates ffmpeg's output; grain isn't shown.</p>
   </section>
 
@@ -78,7 +79,12 @@
       <div id="cdur" class="hint"></div>
 
       <h3>Template: Blurred Short</h3>
+      <p class="hint">The sharp clip stays a full landscape window. Zoom magnifies the picture <em>inside</em> it.</p>
       <label class="slider">Zoom <input id="zoom" type="range" min="100" max="150" value="100"> <output id="zoomv">100%</output></label>
+      <label class="slider">Pan left/right <input id="pan" type="range" min="-100" max="100" value="0"> <output id="panv">center</output></label>
+      <label class="slider">Pan up/down <input id="pany" type="range" min="-100" max="100" value="0"> <output id="panyv">center</output></label>
+      <label class="slider">Clip position <input id="ypos" type="range" min="-960" max="960" step="10" value="0"> <output id="yposv">center</output></label>
+      <div class="row"><button id="recenter">Reset position &amp; pan</button></div>
       <label class="slider">Game volume <input id="volume" type="range" min="0" max="100" value="20"> <output id="volumev">20%</output></label>
       <label class="check"><input type="checkbox" id="mute"> Mute game audio</label>
       <label class="slider">Film grain <input id="grain" type="range" min="0" max="40" value="0"> <output id="grainv">off</output></label>

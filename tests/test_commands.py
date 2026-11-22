@@ -34,13 +34,51 @@ def test_foreground_no_zoom_no_crop():
 
 def test_foreground_zoom_crops_sides():
     g = graph(zoom=1.5)
-    assert "[fgin]scale=1620:-2,crop=1080:ih[fg]" in g
+    assert ("[fgin]scale=1620:-2,crop=1080:trunc(ih*1080/iw/2)*2:"
+            "x=(iw-ow)*0.5000:y=(ih-oh)*0.5000[fg]") in g
 
 
 def test_foreground_centered_overlay_and_fps():
     g = graph()
-    assert "overlay=(W-w)/2:(H-h)/2" in g
+    assert "overlay=(W-w)/2:min(max(0\\,(H-h)/2+(0))\\,H-h)" in g
     assert "fps=30" in g
+
+
+def test_vertical_offset_moves_foreground():
+    g = graph(fg_y=-300)
+    assert "(H-h)/2+(-300)" in g and "min(max(0" in g
+
+
+def test_pan_left_and_right_when_zoomed():
+    assert "x=(iw-ow)*0.0000" in graph(zoom=1.5, pan=-1)
+    assert "x=(iw-ow)*1.0000" in graph(zoom=1.5, pan=1)
+    assert "x=(iw-ow)*0.7500" in graph(zoom=1.5, pan=0.5)
+
+
+def test_vertical_pan_when_zoomed():
+    assert "y=(ih-oh)*0.0000" in graph(zoom=1.5, pan_y=-1)
+    assert "y=(ih-oh)*1.0000" in graph(zoom=1.5, pan_y=1)
+
+
+def test_zoom_keeps_landscape_window():
+    # crop height is derived from the width ratio, so the window never becomes taller
+    assert "crop=1080:trunc(ih*1080/iw/2)*2" in graph(zoom=2.0 if False else 1.5)
+
+
+def test_pan_ignored_without_zoom():
+    fg_chain = graph(zoom=1.0, pan=1).split("[fgin]")[-1].split("[fg]")[0]
+    assert fg_chain == "scale=1080:-2"
+
+
+def test_position_validation():
+    s = c.spec_from_dict(d(fg_y=-200, pan=0.3, pan_y=-0.5))
+    assert s.fg_y == -200 and s.pan == 0.3 and s.pan_y == -0.5
+    with pytest.raises(ValidationError):
+        c.spec_from_dict(d(pan_y=-3))
+    with pytest.raises(ValidationError):
+        c.spec_from_dict(d(fg_y=5000))
+    with pytest.raises(ValidationError):
+        c.spec_from_dict(d(pan=2))
 
 
 # ---- audio ------------------------------------------------------------------

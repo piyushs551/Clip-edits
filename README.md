@@ -53,8 +53,11 @@ Exports go to `projects\exports\` (set `DAILYCLIP_OUT` to change; `DAILYCLIP_DAT
 3. **Suggest moments** (optional): scans audio for loud peaks (50 ms windows, above the 95th percentile, ≥ 4 s apart,
    strongest 30 shown) with thumbnails. Loud isn't always interesting — press *Keep* only on the ones you want.
 4. **Blurred Short** template: blurred+darkened background (boxblur 30:5, brightness −0.15, optional film grain),
-   sharp foreground at 1080 wide with 100–150 % zoom, game volume (default 20 %) or mute. The middle panel is a live
-   9:16 preview with the **safe areas** shaded (top 150 px, bottom 400 px, right 150 px).
+   game volume (default 20 %) or mute. The sharp clip is always a **full-width landscape window** (1080 px wide).
+   **Zoom** (100–150 %) magnifies the picture *inside* that window; **Pan left/right** and **Pan up/down** choose which
+   part you see, and **Clip position** moves the whole window up or down the Short (it stays inside the frame).
+   You can also work in the live 9:16 preview: **drag** = move the clip up/down, **Shift+drag** = pan inside a zoomed
+   clip, **scroll** = zoom. Red shading marks the **safe areas** (top 150 px, bottom 400 px, right 150 px).
 5. **Text**: Poppins Bold (bundled; falls back to Arial Bold / DejaVu), black outline, centered, default y = 250.
    White or red `#FF5A5F`. Presets are saved to `projects/presets.json` and include a small red **DAY 1** top-left label.
 6. **End card** (optional): your logo on navy `#1E1B4B` for 2.5 s. **Freeze** holds the last frame 1–2 s.

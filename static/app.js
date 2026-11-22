@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const S = {
   info: null, clips: [], sugg: [], sel: null, presets: {},
-  t: { zoom: 100, volume: 20, mute: false, grain: 0, freeze: 0, quality: "crf", slug: "short" },
+  t: { zoom: 100, xpan: 0, ypan: 0, ypos: 0, volume: 20, mute: false, grain: 0, freeze: 0, quality: "crf", slug: "short" },
   endcard: false, logo: "",
 };
 const PRE = 5, POST = 15;                 // mark -> start = mark-5, end = mark+15
@@ -218,7 +218,7 @@ function renderEditor() {
   const c = clip(); $("noclip").hidden = !!c; $("editor").hidden = !c; if (!c) return;
   $("cstart").value = c.start.toFixed(2); $("cend").value = c.end.toFixed(2);
   updateDurLabel();
-  $("zoom").value = S.t.zoom; $("zoomv").textContent = S.t.zoom + "%";
+  syncPos();
   $("volume").value = S.t.volume; $("volumev").textContent = S.t.volume + "%";
   $("mute").checked = S.t.mute; $("grain").value = S.t.grain; $("grainv").textContent = S.t.grain ? S.t.grain : "off";
   $("freeze").value = String(S.t.freeze); $("quality").value = S.t.quality; $("slug").value = S.t.slug;
@@ -246,7 +246,18 @@ $("setend").onclick = () => { const c = clip(); c.end = video.currentTime; rende
 function bindSlider(id, outId, field, fmt) {
   $(id).addEventListener("input", () => { S.t[field] = Number($(id).value); $(outId).textContent = fmt(S.t[field]); updateDurLabel(); persist(); });
 }
+const fmtC = (v) => (v ? (v > 0 ? "+" : "") + v : "center");
+function syncPos() {
+  $("zoom").value = S.t.zoom; $("zoomv").textContent = S.t.zoom + "%";
+  $("pan").value = S.t.xpan; $("panv").textContent = fmtC(S.t.xpan);
+  $("pany").value = S.t.ypan; $("panyv").textContent = fmtC(S.t.ypan);
+  $("ypos").value = S.t.ypos; $("yposv").textContent = fmtC(S.t.ypos);
+}
 bindSlider("zoom", "zoomv", "zoom", (v) => v + "%");
+bindSlider("pan", "panv", "xpan", fmtC);
+bindSlider("pany", "panyv", "ypan", fmtC);
+bindSlider("ypos", "yposv", "ypos", fmtC);
+$("recenter").onclick = () => { S.t.xpan = S.t.ypan = S.t.ypos = 0; syncPos(); persist(); };
 bindSlider("volume", "volumev", "volume", (v) => v + "%");
 bindSlider("grain", "grainv", "grain", (v) => (v ? v : "off"));
 $("mute").onchange = () => { S.t.mute = $("mute").checked; persist(); };
@@ -320,7 +331,7 @@ $("export").onclick = async () => {
   $("export").disabled = true; $("result").hidden = true; $("exportprog").hidden = false;
   $("exportfill").style.width = "0%"; $("exportmsg").textContent = "Exporting…";
   const body = {
-    start: c.start, end: c.end, zoom: S.t.zoom / 100, volume: S.t.volume / 100, mute: S.t.mute,
+    start: c.start, end: c.end, zoom: S.t.zoom / 100, pan: S.t.xpan / 100, pan_y: S.t.ypan / 100, fg_y: S.t.ypos, volume: S.t.volume / 100, mute: S.t.mute,
     grain: S.t.grain, freeze: S.t.freeze, quality: S.t.quality, slug: S.t.slug,
     endcard_logo: S.endcard ? S.logo : null,
     texts: c.texts.map((t) => ({ ...t, color: t.color === "red" ? RED : t.color })),
@@ -338,6 +349,34 @@ $("export").onclick = async () => {
 
 // ---------- 9:16 live preview -----------------------------------------------
 const cv = $("short"), ctx = cv.getContext("2d");
+// geometry of the sharp clip in preview pixels (mirrors the ffmpeg filter)
+function fgGeom() {
+  const W = cv.width, H = cv.height, vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+  const z = S.t.zoom / 100, wh = vh * (W / vw), fw = W * z, fh = wh * z;
+  const wy = clamp((H - wh) / 2 + S.t.ypos * SC, 0, H - wh);
+  return { wh, fw, fh, wy, ox: -(fw - W) * (S.t.xpan + 100) / 200, oy: -(fh - wh) * (S.t.ypan + 100) / 200 };
+}
+let drag = null;
+cv.addEventListener("pointerdown", (e) => { cv.setPointerCapture(e.pointerId); drag = { x: e.clientX, y: e.clientY, t: { ...S.t }, shift: e.shiftKey }; cv.style.cursor = "grabbing"; });
+cv.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const k = cv.width / cv.getBoundingClientRect().width;        // CSS px -> canvas px
+  const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
+  if (drag.shift || e.shiftKey) {                                 // pan inside the zoomed picture
+    const z = drag.t.zoom / 100, W = cv.width, vh = video.videoHeight || 9, vw = video.videoWidth || 16;
+    const rx = W * (z - 1), ry = vh * (W / vw) * (z - 1);
+    if (rx > 0) S.t.xpan = Math.round(clamp(drag.t.xpan - (dx / rx) * 200, -100, 100));
+    if (ry > 0) S.t.ypan = Math.round(clamp(drag.t.ypan - (dy / ry) * 200, -100, 100));
+  } else {
+    S.t.ypos = Math.round(clamp(drag.t.ypos + dy / SC, -960, 960) / 10) * 10;
+  }
+  syncPos();
+});
+const endDrag = () => { if (drag) { drag = null; cv.style.cursor = "grab"; persist(); } };
+cv.addEventListener("pointerup", endDrag); cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("wheel", (e) => { e.preventDefault(); S.t.zoom = clamp(S.t.zoom + (e.deltaY < 0 ? 5 : -5), 100, 150); syncPos(); persist(); }, { passive: false });
+cv.style.cursor = "grab"; cv.style.touchAction = "none";
+
 function drawPreview() {
   const W = cv.width, H = cv.height;
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
@@ -347,9 +386,10 @@ function drawPreview() {
     const s = Math.max(W / vw, H / vh);
     ctx.save(); ctx.filter = "blur(9px) brightness(0.85)";
     ctx.drawImage(video, (W - vw * s) / 2, (H - vh * s) / 2, vw * s, vh * s); ctx.restore();
-    // foreground: 1080 wide x zoom, centered, sides cropped by canvas
-    const z = S.t.zoom / 100, fw = W * z, fh = vh * (fw / vw);
-    ctx.drawImage(video, (W - fw) / 2, (H - fh) / 2, fw, fh);
+    // foreground: a full-width landscape window; zoom magnifies the picture inside it
+    const g = fgGeom();
+    ctx.save(); ctx.beginPath(); ctx.rect(0, g.wy, W, g.wh); ctx.clip();
+    ctx.drawImage(video, g.ox, g.wy + g.oy, g.fw, g.fh); ctx.restore();
   }
   const c = clip();
   if (c) {
