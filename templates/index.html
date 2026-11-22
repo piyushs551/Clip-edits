@@ -106,6 +106,12 @@
       <label class="check"><input type="checkbox" id="endcard"> Logo on navy, 2.5 s</label>
       <div class="row"><input id="logo" type="text" placeholder="Logo image path" spellcheck="false"><button id="picklogo">Browse…</button></div>
 
+      <h3>Short checklist</h3>
+      <ul id="checks" class="checks"></ul>
+      <div class="row"><button id="srcsheet">Check source frames (privacy)</button></div>
+      <a id="srcsheetlink" target="_blank"><img id="srcsheetimg" class="sheetimg" alt="Source frames" hidden></a>
+      <label class="check privacy"><input type="checkbox" id="privacyok"> <span id="privacytext">I checked the frames for my PSN name, wallet, email, redeem codes and notifications.</span></label>
+
       <h3>Export</h3>
       <div class="row">
         <label>Name <input id="slug" type="text" value="short" size="18"></label>
@@ -113,7 +119,7 @@
           <select id="fps"><option value="30">30 fps</option><option value="60">60 fps (smooth)</option></select>
         </label>
         <label>Quality
-          <select id="quality"><option value="best">Best (crisp, slower)</option><option value="crf">Good (CRF 18)</option><option value="bitrate">20 Mbps</option></select>
+          <select id="quality"><option value="bitrate">20 Mbps (recommended)</option><option value="best">Best (CRF 14, bigger/slower)</option><option value="crf">Good (CRF 18)</option></select>
         </label>
       </div>
       <button id="export" class="primary big">Export Short</button>

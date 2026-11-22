@@ -14,10 +14,11 @@ Updated with every change; newest entries first.
 - [x] 5. Text overlays (time range, size, white/red), Poppins Bold + black outline, safe-area preview, saved presets incl. red "DAY 1" label
 - [x] 6. Optional end card (logo on navy #1E1B4B, 2.5 s)
 - [x] 7. Export: libx264 Best (CRF 14) / CRF 18 / 20 Mbps, 30 or 60 fps, yuv420p, aac 192k, faststart, dated slug filename, progress bar
-- [x] 8. Privacy contact sheet (8 frames) after export
+- [x] 8. Privacy contact sheet (8 frames) after export, plus a source-frame sheet before export and a confirmation tick
+- [x] 10. DailyClip rule checklist (hook, <=6 words, safe areas, <30 s, pacing, clean last frame)
 - [x] 9. Freeze last frame 1–2 s
 - [x] Error handling: missing ffmpeg (winget hint), bad file, end ≤ start
-- [x] Tests: 76 passing (unit + synthetic-clip integration + Flask API)
+- [x] Tests: 95 passing (unit + synthetic-clip integration + Flask API)
 
 ### Verified so far (Linux, headless)
 - Unit + integration tests, including a font path containing a colon and spaces (stand-in for `C:\`)
@@ -36,13 +37,19 @@ Updated with every change; newest entries first.
 
 ## Log
 
+### 2026-11-22 (DailyClip rules built in)
+- Added the three channel skills to `.claude/skills/` (shorts-packaging, clipify, dailyclip-workflow) and a section in `CLAUDE.md` so they are followed when planning/changing the app.
+- New `dailyclip/checks.py` + live **Short checklist** in the UI: hook on frame one / within 3 s, lines <= 6 words, safe areas (top 150, bottom 400, right 150; width estimated from measured Poppins Bold metrics), under 30 s, change every 2-4 s, clean last frame. Advisory only.
+- Privacy: **Check source frames** (contact sheet of the clip's source footage, before export) + confirmation tick; export asks if it isn't ticked. Post-export contact sheet unchanged.
+- Default export quality is now 20 Mbps (your preference, from the original file); Best (CRF 14) and Good (CRF 18) remain.
+
 ### 2026-11-22 (quality)
 - Crispness pass: default quality is now *Best* (x264 CRF 14, preset slow, High profile), Lanczos resize for the sharp clip, BT.709 colour tags, GOP = 2 s, optional 60 fps output (30 stays default). "Good" (CRF 18) and 20 Mbps remain selectable.
 - Tips for upload: upload the MP4 directly (not a screen recording), 1080x1920; 60 fps for fast gameplay.
 
 ### 2026-11-22 (frame layout)
 - Added frame rearranging: vertical clip position (clamped to the frame), zoom that magnifies *inside* the full-landscape window (instead of widening it), horizontal + vertical pan. Preview supports drag, Shift+drag and scroll.
-- Tests: filter-string checks plus integration tests that measure where the sharp window lands in a real export (noise clip) and that zoom/pan change the visible content. 76 passing.
+- Tests: filter-string checks plus integration tests that measure where the sharp window lands in a real export (noise clip) and that zoom/pan change the visible content. 95 passing.
 - Browser-checked: preview and exported frames agree.
 
 ### 2026-11-22 (Windows first run)

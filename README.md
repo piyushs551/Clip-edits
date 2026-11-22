@@ -60,13 +60,18 @@ Exports go to `projects\exports\` (set `DAILYCLIP_OUT` to change; `DAILYCLIP_DAT
    clip, **scroll** = zoom. Red shading marks the **safe areas** (top 150 px, bottom 400 px, right 150 px).
 5. **Text**: Poppins Bold (bundled; falls back to Arial Bold / DejaVu), black outline, centered, default y = 250.
    White or red `#FF5A5F`. Presets are saved to `projects/presets.json` and include a small red **DAY 1** top-left label.
-6. **End card** (optional): your logo on navy `#1E1B4B` for 2.5 s. **Freeze** holds the last frame 1–2 s.
-7. **Export**: libx264 High profile, yuv420p, AAC 192k, faststart, no watermark →
-   `YYYY-MM-DD_name.mp4`. **Quality** options: *Best* (CRF 14, slow preset - default, crisp enough to survive
-   YouTube/TikTok/Instagram re-encoding; slower to export and bigger files), *Good* (CRF 18), or 20 Mbps.
+6. **Short checklist** (live, above Export) applies the DailyClip rules from `.claude/skills/`: hook text on frame one
+   (or within 3 s), lines of 6 words or fewer, text inside the safe areas, under 30 s, a change on screen every 2-4 s, and a
+   clean last frame. They are warnings, not blockers. **Check source frames (privacy)** builds a contact sheet of the
+   selected clip's *source* footage so you can look for your PSN name, wallet, email, redeem codes and notifications
+   before exporting; tick the confirmation (Export asks if you haven't).
+7. **End card** (optional): your logo on navy `#1E1B4B` for 2.5 s. **Freeze** holds the last frame 1–2 s.
+8. **Export**: libx264 High profile, yuv420p, AAC 192k, faststart, no watermark →
+   `YYYY-MM-DD_name.mp4`. **Quality** options: *20 Mbps* (default, the recommended upload quality), *Best* (CRF 14, slow preset - bigger
+   files, slower), or *Good* (CRF 18).
    **Frame rate**: 30 fps, or 60 fps for smoother gameplay (PS5 captures are 60 fps). The sharp clip is resized once
    with Lanczos (sharpest scaler) and the video is tagged BT.709 so platforms don't shift your colours.
- A **contact sheet** of 8 frames appears afterwards — check it for your PSN name,
+   A **contact sheet** of 8 frames appears afterwards — check it for your PSN name,
    notifications, trophy pop-ups and chat before posting.
 
 Clips, text and settings are remembered per video in your browser (localStorage).

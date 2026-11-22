@@ -14,7 +14,7 @@ from pathlib import Path
 from werkzeug.exceptions import HTTPException
 from flask import Flask, jsonify, render_template, request, send_file, send_from_directory
 
-from dailyclip import commands, peaks, presets
+from dailyclip import checks, commands, peaks, presets
 from dailyclip.probe import probe
 from dailyclip.runner import run_simple, run_with_progress
 from dailyclip.util import (BASE_DIR, BadFileError, DailyClipError, FFmpegFailed,
@@ -296,13 +296,46 @@ def export():
             run_with_progress(cmd, final.total_duration, lambda p: progress(p * 0.95))
             sheet = out_path.with_suffix(".contact.jpg")
             made = make_contact_sheet(out_path, sheet)
-            return {"file": out_path.name, "path": str(out_path),
+            return {"file": out_path.name, "path": str(out_path), "checks": checks.check_short(final),
                     "url": f"/media/exports/{out_path.name}",
                     "contact_sheet": f"/media/exports/{sheet.name}" if made else None}
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
 
     return jsonify(job=start_job("export", work))
+
+
+@app.post("/api/check")
+def check_short():
+    """Rule checklist for the selected clip (hook, words, safe areas, length...)."""
+    video = _need_video()
+    body = request.get_json(silent=True) or {}
+    body["src"] = video["path"]
+    body["endcard_logo"] = clean_user_path(body.get("endcard_logo") or "") or None
+    try:
+        spec = commands.spec_from_dict(body, video["duration"], video["has_audio"])
+    except DailyClipError as e:
+        return jsonify(checks=[{"id": "invalid", "status": "warn", "message": str(e)}])
+    return jsonify(checks=checks.check_short(spec))
+
+
+@app.post("/api/source-sheet")
+def source_sheet():
+    """Privacy check BEFORE export: contact sheet of the clip's source frames."""
+    video = _need_video()
+    body = request.get_json(silent=True) or {}
+    try:
+        start, end = float(body.get("start")), float(body.get("end"))
+    except (TypeError, ValueError):
+        raise BadFileError("Pick a clip with valid start and end times first.")
+    if not 0 <= start < end <= video["duration"] + 0.05:
+        raise BadFileError("End time must be after start time, inside the video.")
+    name = f"{_slug_key(video)}_src_{int(start * 1000)}_{int(end * 1000)}.jpg"
+    dst = THUMBS / name
+    if not dst.is_file():
+        run_simple(commands.build_contact_sheet_cmd(video["path"], str(dst), end - start, 8,
+                                                    start=start), timeout=180)
+    return jsonify(url=f"/media/thumbs/{name}")
 
 
 def make_contact_sheet(video_path: Path, dst: Path) -> bool:

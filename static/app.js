@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const S = {
   info: null, clips: [], sugg: [], sel: null, presets: {},
-  t: { zoom: 100, xpan: 0, ypan: 0, ypos: 0, volume: 20, mute: false, grain: 0, freeze: 0, quality: "best", fps: 30, slug: "short" },
+  t: { zoom: 100, xpan: 0, ypan: 0, ypos: 0, volume: 20, mute: false, grain: 0, freeze: 0, quality: "bitrate", fps: 30, slug: "short" },
   endcard: false, logo: "",
 };
 const PRE = 5, POST = 15;                 // mark -> start = mark-5, end = mark+15
@@ -114,6 +114,7 @@ async function poll(job, onProgress) {
 const key = () => "dailyclip:project:" + (S.info ? S.info.key : "");
 function persist() {
   if (!S.info) return;
+  refreshChecks();
   try { localStorage.setItem(key(), JSON.stringify({ clips: S.clips, t: S.t, endcard: S.endcard, logo: S.logo, nextId })); } catch (e) {}
 }
 function restore() {
@@ -224,6 +225,8 @@ function renderEditor() {
   $("freeze").value = String(S.t.freeze); $("quality").value = S.t.quality; $("fps").value = String(S.t.fps); $("slug").value = S.t.slug;
   $("endcard").checked = S.endcard; $("logo").value = S.logo;
   renderTexts();
+  $("privacyok").checked = !!c.privacyOk; $("srcsheetimg").hidden = true;
+  refreshChecks();
 }
 function updateDurLabel() {
   const c = clip(); if (!c) return;
@@ -235,13 +238,13 @@ function bindTime(inputId, field) {
   $(inputId).addEventListener("change", () => {
     const c = clip(); const v = parseTime($(inputId).value);
     if (isNaN(v)) { toast("Enter a time like 83.5 or 1:23.5"); return renderEditor(); }
-    c[field] = clamp(v, 0, dur()); renderClips(); updateDurLabel(); persist();
+    c[field] = clamp(v, 0, dur()); c.privacyOk = false; $("privacyok").checked = false; renderClips(); updateDurLabel(); persist();
     if (!(c.end > c.start)) toast("End time must be after start time.");
   });
 }
 bindTime("cstart", "start"); bindTime("cend", "end");
-$("setstart").onclick = () => { const c = clip(); c.start = video.currentTime; renderAll(); persist(); if (!(c.end > c.start)) toast("End time must be after start time."); };
-$("setend").onclick = () => { const c = clip(); c.end = video.currentTime; renderAll(); persist(); if (!(c.end > c.start)) toast("End time must be after start time."); };
+$("setstart").onclick = () => { const c = clip(); c.start = video.currentTime; c.privacyOk = false; renderAll(); persist(); if (!(c.end > c.start)) toast("End time must be after start time."); };
+$("setend").onclick = () => { const c = clip(); c.end = video.currentTime; c.privacyOk = false; renderAll(); persist(); if (!(c.end > c.start)) toast("End time must be after start time."); };
 
 function bindSlider(id, outId, field, fmt) {
   $(id).addEventListener("input", () => { S.t[field] = Number($(id).value); $(outId).textContent = fmt(S.t[field]); updateDurLabel(); persist(); });
@@ -325,18 +328,53 @@ function renderTexts() {
 }
 
 // ---------- export -----------------------------------------------------------
-$("export").onclick = async () => {
-  const c = clip(); if (!c) return;
-  if (!(c.end > c.start)) return toast("End time must be after start time.");
-  if (S.endcard && !S.logo.trim()) return toast("Choose a logo image for the end card, or untick it.");
-  $("export").disabled = true; $("result").hidden = true; $("exportprog").hidden = false;
-  $("exportfill").style.width = "0%"; $("exportmsg").textContent = "Exporting…";
-  const body = {
+function exportBody(c) {
+  return {
     start: c.start, end: c.end, zoom: S.t.zoom / 100, pan: S.t.xpan / 100, pan_y: S.t.ypan / 100, fg_y: S.t.ypos, volume: S.t.volume / 100, mute: S.t.mute,
     grain: S.t.grain, freeze: S.t.freeze, quality: S.t.quality, fps: S.t.fps, slug: S.t.slug,
     endcard_logo: S.endcard ? S.logo : null,
     texts: c.texts.map((t) => ({ ...t, color: t.color === "red" ? RED : t.color })),
   };
+}
+
+// ---------- rule checklist (hook, words, safe areas, length, last frame, privacy) ----
+let checkSeq = 0, checkTimer = null;
+function refreshChecks() {
+  clearTimeout(checkTimer); checkTimer = setTimeout(async () => {
+    const c = clip(); if (!c || !S.info) return;
+    const seq = ++checkSeq;
+    try {
+      const { checks } = await api("/api/check", exportBody(c));
+      if (seq !== checkSeq) return;
+      const ul = $("checks"); ul.innerHTML = "";
+      checks.filter((k) => k.status !== "manual").forEach((k) => {
+        const li = document.createElement("li"); li.className = k.status;
+        li.innerHTML = `<span class="ic">${k.status === "pass" ? "✓" : "⚠"}</span><span></span>`;
+        li.lastChild.textContent = k.message; ul.appendChild(li);
+      });
+    } catch (e) { /* checklist is advisory; ignore transient errors */ }
+  }, 350);
+}
+$("privacyok").onchange = () => { const c = clip(); if (c) { c.privacyOk = $("privacyok").checked; persist(); } };
+$("srcsheet").onclick = async () => {
+  const c = clip(); if (!c) return;
+  if (!(c.end > c.start)) return toast("End time must be after start time.");
+  $("srcsheet").disabled = true; $("srcsheet").textContent = "Building contact sheet…";
+  try {
+    const r = await api("/api/source-sheet", { start: c.start, end: c.end });
+    $("srcsheetimg").src = r.url + "?t=" + Date.now(); $("srcsheetlink").href = r.url; $("srcsheetimg").hidden = false;
+  } catch (e) { fail(e); }
+  finally { $("srcsheet").disabled = false; $("srcsheet").textContent = "Check source frames (privacy)"; }
+};
+
+$("export").onclick = async () => {
+  const c = clip(); if (!c) return;
+  if (!(c.end > c.start)) return toast("End time must be after start time.");
+  if (S.endcard && !S.logo.trim()) return toast("Choose a logo image for the end card, or untick it.");
+  if (!c.privacyOk && !confirm("You haven't ticked the privacy check (PSN name, wallet, email, redeem codes, notifications). Export anyway?")) return;
+  $("export").disabled = true; $("result").hidden = true; $("exportprog").hidden = false;
+  $("exportfill").style.width = "0%"; $("exportmsg").textContent = "Exporting…";
+  const body = exportBody(c);
   try {
     const { job } = await api("/api/export", body);
     const res = await poll(job, (j) => { const p = Math.round(j.progress * 100); $("exportfill").style.width = p + "%"; $("exportmsg").textContent = `Exporting… ${p}%`; });

@@ -195,7 +195,7 @@ def test_fontfile_escaped_in_filter(tmp_path):
 def test_export_command_encoding_flags():
     cmd = c.build_export_cmd(spec(font="/f.ttf"), "out.mp4")
     j = " ".join(cmd)
-    for needle in ("-c:v libx264", "-profile:v high", "-crf 14", "-preset slow", "-pix_fmt yuv420p",
+    for needle in ("-c:v libx264", "-profile:v high", "-b:v 20M", "-preset slow", "-pix_fmt yuv420p",
                    "-c:a aac", "-b:a 192k", "-movflags +faststart", "-r 30",
                    "-colorspace bt709", "-color_primaries bt709", "-color_trc bt709"):
         assert needle in j
@@ -210,8 +210,9 @@ def test_quality_presets():
     assert "-b:v 20M" in j("bitrate") and "-crf" not in j("bitrate")
 
 
-def test_default_quality_is_best():
-    assert c.spec_from_dict(d()).quality == "best"
+def test_default_quality_is_20mbps_and_best_still_available():
+    assert c.spec_from_dict(d()).quality == "bitrate"
+    assert c.spec_from_dict(d(quality="best")).quality == "best"
     with pytest.raises(ValidationError):
         c.spec_from_dict(d(quality="ultra"))
 
@@ -254,6 +255,11 @@ def test_proxy_command_540p():
 def test_thumbnail_command():
     cmd = c.build_thumbnail_cmd("a.mp4", 12.5, "t.jpg")
     assert cmd[cmd.index("-ss") + 1] == "12.5" and "-frames:v" in cmd
+
+
+def test_contact_sheet_source_slice():
+    cmd = c.build_contact_sheet_cmd("a.mp4", "s.jpg", 20, 8, start=100)
+    assert cmd[cmd.index("-ss") + 1] == "101.25" and cmd[cmd.index("-t") + 1] == "18.75"
 
 
 def test_contact_sheet_frame_count_clamped():

@@ -45,6 +45,12 @@ label { color:var(--text); }
 .textrow { background:#222233; border-radius:8px; padding:8px; margin:8px 0; display:grid; gap:6px; }
 .textrow textarea { width:100%; background:#262638; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 10px; font:inherit; resize:vertical; min-height:36px; }
 .textrow .row { margin:0; } .textrow input[type=number] { width:68px; }
+.checks { list-style:none; margin:0; padding:0; display:grid; gap:4px; }
+.checks li { display:flex; gap:8px; font-size:13px; align-items:flex-start; }
+.checks li .ic { width:18px; flex:none; text-align:center; }
+.checks li.pass .ic { color:#3ecf8e; } .checks li.warn .ic { color:#ffc857; } .checks li.warn { color:#ffe3a3; }
+.sheetimg { width:100%; border-radius:6px; border:1px solid var(--line); margin:6px 0; }
+.privacy { align-items:flex-start; font-size:13px; }
 .empty { color:var(--mut); padding:30px 10px; text-align:center; }
 #sheet { width:100%; border-radius:6px; border:1px solid var(--line); }
 code { color:var(--mut); word-break:break-all; }

@@ -59,7 +59,7 @@ class ExportSpec:
     endcard_logo: Optional[str] = None
     endcard_secs: float = ENDCARD_SECS
     freeze: float = 0.0
-    quality: str = "best"       # "best" (CRF 14, slow) | "crf" (CRF 18) | "bitrate" (20 Mbps)
+    quality: str = "bitrate"    # "bitrate" (20 Mbps, default) | "best" (CRF 14, slow) | "crf" (CRF 18)
     fps: int = FPS              # output frame rate: 30 or 60
     font: Optional[str] = None
 
@@ -113,7 +113,7 @@ def spec_from_dict(d: dict, src_duration: float | None = None,
     volume = num("volume", 0.2, 0.0, 1.0, "Game volume")
     grain = int(num("grain", 0, 0, 50, "Film grain"))
     freeze = num("freeze", 0.0, 0.0, MAX_FREEZE, "Freeze")
-    quality = d.get("quality", "best")
+    quality = d.get("quality", "bitrate")
     if quality not in ("best", "crf", "bitrate"):
         raise ValidationError("Quality must be 'best', 'crf' or 'bitrate'.")
     fps = int(num("fps", FPS, 1, 120, "Frame rate"))
@@ -353,14 +353,18 @@ def build_audio_pcm_cmd(src: str, sample_rate: int = 8000, ffmpeg: str = "ffmpeg
 
 
 def build_contact_sheet_cmd(video: str, dst: str, duration: float, frames: int = 8,
-                            thumb_width: int = 360, ffmpeg: str = "ffmpeg") -> list[str]:
-    """One JPG with 6-8 evenly spaced frames (privacy check before posting)."""
+                            thumb_width: int = 360, ffmpeg: str = "ffmpeg",
+                            start: float = 0.0) -> list[str]:
+    """One JPG with 6-8 evenly spaced frames (privacy check before posting).
+
+    `start`/`duration` select a slice, so the same builder also checks the SOURCE
+    footage for a clip before it is exported."""
     frames = max(6, min(8, int(frames)))
     cols = 4 if frames > 6 else 3
     rows = -(-frames // cols)
     step = duration / frames
     return [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-nostdin",
-            "-ss", fmt(step / 2), "-i", str(video),
+            "-ss", fmt(start + step / 2), "-t", fmt(duration - step / 2), "-i", str(video),
             "-vf", f"fps=1/{fmt(step)},scale={thumb_width}:-2,"
                    f"tile={cols}x{rows}:padding=6:margin=6:color=black",
             "-frames:v", "1", "-q:v", "3", str(dst)]
